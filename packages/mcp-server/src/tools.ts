@@ -1,5 +1,11 @@
-interface ServerConfig {
+interface SessionState {
   apiKey: string;
+  jwt: string;
+  phone: string;
+}
+
+interface ServerConfig {
+  session: SessionState;
   apiUrl: string;
   defaults: { name: string; phone: string; address: string };
 }
@@ -17,10 +23,21 @@ const CREAM_TYPES = ['french', 'newzealand'] as const;
 const SIZE_OPTIONS = ['4', '6', '8', '10', '12'] as const;
 const DECORATION_TYPES = ['none', 'fruit', 'chocolate', 'macaron', 'flowers', 'goldFoil', 'sugarFlowers'] as const;
 
-async function apiCall(config: ServerConfig, method: string, path: string, body?: unknown) {
+async function apiCall(
+  config: ServerConfig,
+  method: string,
+  path: string,
+  body?: unknown,
+  auth: 'apiKey' | 'public' = 'apiKey',
+) {
+  const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+  if (auth === 'apiKey') {
+    if (!config.session.apiKey) throw new Error('未登录。请先提供手机号获取验证码登录。');
+    headers['Authorization'] = `Bearer ${config.session.apiKey}`;
+  }
   const res = await fetch(`${config.apiUrl}${path}`, {
     method,
-    headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${config.apiKey}` },
+    headers,
     body: body ? JSON.stringify(body) : undefined,
   });
   const data = await res.json();
@@ -29,9 +46,81 @@ async function apiCall(config: ServerConfig, method: string, path: string, body?
 }
 
 export function registerTools(config: ServerConfig): ToolDef[] {
-  const { defaults } = config;
+  const { defaults, session } = config;
 
   return [
+    // ── send_login_code ──────────────────────────────────────────────────
+    {
+      name: 'send_login_code',
+      description:
+        '发送登录验证码到用户手机。用户首次下单前，需先提供手机号获取6位验证码。' +
+        '仅发送验证码，不会登录。验证码5分钟内有效。',
+      inputSchema: {
+        type: 'object',
+        properties: {
+          phone: { type: 'string', description: '中国大陆手机号码（11位）' },
+        },
+        required: ['phone'],
+      },
+      handler: async (args) => {
+        session.phone = args.phone as string;
+        await apiCall(config, 'POST', '/api/auth/sms', { phone: session.phone }, 'public');
+        return {
+          success: true,
+          message: `验证码已发送到 ${session.phone}，5分钟内有效。请将收到的6位验证码提供给我。`,
+        };
+      },
+    },
+
+    // ── login_with_code ──────────────────────────────────────────────────
+    {
+      name: 'login_with_code',
+      description:
+        '用手机号和验证码登录。验证成功后自动创建或关联1Cake账户，返回API Key用于后续下单。' +
+        '登录成功后，后续所有下单操作将使用该账户身份。',
+      inputSchema: {
+        type: 'object',
+        properties: {
+          phone: { type: 'string', description: '中国大陆手机号码（11位）' },
+          code: { type: 'string', description: '6位短信验证码' },
+        },
+        required: ['phone', 'code'],
+      },
+      handler: async (args) => {
+        const phone = (args.phone as string) || session.phone;
+        const code = args.code as string;
+
+        // Step 1: Login with SMS code (auto-creates account if new)
+        const loginResult: any = await apiCall(config, 'POST', '/api/auth/login', { phone, code }, 'public');
+        session.jwt = loginResult.accessToken;
+
+        // Step 2: Create API key (using JWT from login)
+        const res = await fetch(`${config.apiUrl}/api/api-keys`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${session.jwt}`,
+          },
+          body: JSON.stringify({ name: 'AI 助手自动生成' }),
+        });
+        const apiKeyResult = await res.json();
+        if (!res.ok) throw new Error(apiKeyResult.message || 'Failed to create API key');
+
+        session.apiKey = apiKeyResult.rawKey;
+        session.phone = phone;
+
+        return {
+          success: true,
+          phone,
+          apiKeyPrefix: apiKeyResult.keyPrefix,
+          message:
+            `登录成功！账户已关联到 ${phone}。` +
+            (apiKeyResult.rawKey ? '' : '（已复用已有 API Key）') +
+            '现在可以开始下单了，请告诉我你想订什么样的蛋糕。',
+        };
+      },
+    },
+
     // ── get_cake_options ──────────────────────────────────────────────────
     {
       name: 'get_cake_options',
@@ -176,16 +265,13 @@ export function registerTools(config: ServerConfig): ToolDef[] {
         };
         const order: any = await apiCall(config, 'POST', '/api/orders/config', body);
 
-        // Auto-create payment (WeChat Pay by default)
         let payment: any = null;
         try {
           payment = await apiCall(config, 'POST', '/api/payments', {
             orderId: order.id,
             method: 'wechat_pay',
           });
-        } catch {
-          // Payment creation is best-effort; order still succeeded
-        }
+        } catch { /* best-effort */ }
 
         const payUrl = `https://1cake.com/pay/${order.id}`;
         return {

@@ -2,7 +2,7 @@
 
 让 AI 助手（Claude Code / OpenClaw / Cursor）用自然语言帮你下单 1Cake 定制蛋糕。
 
-> **下单人统一为 AI 助手**（通过 API Key 识别），不再每单收集用户数据。
+> **手机验证码登录**，无需提前注册或管理 API Key。
 
 ## 是什么
 
@@ -10,8 +10,12 @@
 
 ```
 你说："帮我订一个8寸草莓蛋糕，周六送到"
+AI："请输入手机号获取验证码"
+你："13800138000"
           ↓
-AI 助手 → MCP Server → 1Cake API → 订单创建 ✅
+AI 发送验证码 → 你输入验证码 → 自动创建/关联账户
+          ↓
+AI 助手 → MCP Server → 1Cake API → 订单创建 ✅ → 返回支付链接
 ```
 
 ## GitHub 和 npm 的关系
@@ -29,7 +33,7 @@ AI 助手 → MCP Server → 1Cake API → 订单创建 ✅
 
 ### 前提
 
-1. 在 https://1cake.com/account/api-keys 创建 API Key（格式：`1ck_xxx...`）
+1. 有 1Cake 账户（或首次使用时通过手机验证码自动注册）
 2. 安装 Node.js ≥ 18
 
 ### 方式一：npm 安装（推荐）
@@ -40,59 +44,28 @@ npm install -g 1cake-mcp-server
 
 # 2. 配置到 Claude Code
 claude mcp add 1cake \
-  --env ONECAKE_API_KEY=1ck_yourkey \
   -- 1cake-mcp-server
 ```
 
-### 方式二：GitHub 安装
+配置完成后，直接在 AI 助手中说"帮我订蛋糕"，AI 会引导你完成手机验证码登录。
+
+### 方式二：提前设置 API Key（可选，跳过登录步骤）
 
 ```bash
-# 1. Clone
-git clone https://github.com/1cake/1cake-skill.git
-cd 1cake-skill/packages/mcp-server
-
-# 2. 安装依赖 + 构建
-npm install && npm run build
-
-# 3. 配置到 Claude Code
 claude mcp add 1cake \
   --env ONECAKE_API_KEY=1ck_yourkey \
-  -- node /path/to/1cake-skill/packages/mcp-server/dist/index.js
-```
-
-### 配置 OpenClaw
-
-在 OpenClaw 的 MCP 设置中添加：
-
-```json
-{
-  "mcpServers": {
-    "1cake": {
-      "command": "1cake-mcp-server",
-      "env": {
-        "ONECAKE_API_KEY": "1ck_yourkey",
-        "ONECAKE_NAME": "张三",
-        "ONECAKE_PHONE": "13800138000",
-        "ONECAKE_ADDRESS": "北京市朝阳区xxx"
-      }
-    }
-  }
-}
+  -- 1cake-mcp-server
 ```
 
 ### 可选环境变量
 
 | 变量 | 说明 | 默认值 |
 |------|------|--------|
-| `ONECAKE_API_KEY` | **必填** API Key | - |
+| `ONECAKE_API_KEY` | 预设 API Key（跳过登录） | 无（走手机验证码登录） |
 | `ONECAKE_API_URL` | API 地址 | `http://101.96.197.15:3001` |
 | `ONECAKE_NAME` | 默认收件人 | `AI 助手` |
 | `ONECAKE_PHONE` | 默认手机号 | 账户绑定手机 |
 | `ONECAKE_ADDRESS` | 默认地址 | 需填写 |
-
-### 配置 Cursor
-
-在 `~/.cursor/mcp.json` 中添加上述配置。
 
 ## 使用示例
 

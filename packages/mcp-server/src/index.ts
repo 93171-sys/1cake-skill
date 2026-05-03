@@ -10,15 +10,14 @@ const DEFAULT_PHONE = process.env.ONECAKE_PHONE || '';
 const DEFAULT_ADDRESS = process.env.ONECAKE_ADDRESS || '';
 const DEFAULT_NAME = process.env.ONECAKE_NAME || 'AI 助手';
 
-if (!API_KEY) {
-  console.error('❌ ONECAKE_API_KEY 未设置');
-  console.error('请在 https://1cake.com/account/api-keys 获取 API Key');
-  console.error('然后设置: export ONECAKE_API_KEY=1ck_yourkey');
-  process.exit(1);
-}
+const session = {
+  apiKey: API_KEY,
+  jwt: '',
+  phone: '',
+};
 
 const tools = registerTools({
-  apiKey: API_KEY,
+  session,
   apiUrl: API_URL,
   defaults: { name: DEFAULT_NAME, phone: DEFAULT_PHONE, address: DEFAULT_ADDRESS },
 });
@@ -47,6 +46,11 @@ async function main() {
   const transport = new StdioServerTransport();
   await server.connect(transport);
   console.error('🍰 1Cake MCP Server 已启动');
+  if (session.apiKey) {
+    console.error('✅ 已从环境变量加载 API Key');
+  } else {
+    console.error('💡 未设置 ONECAKE_API_KEY，用户需通过手机验证码登录');
+  }
 }
 
 main().catch((error) => { console.error('Fatal:', error); process.exit(1); });
