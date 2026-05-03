@@ -121,6 +121,19 @@ export function registerTools(config: ServerConfig): ToolDef[] {
       },
     },
 
+    // ── get_my_addresses ──────────────────────────────────────────────────
+    {
+      name: 'get_my_addresses',
+      description:
+        '获取当前账户的历史收件地址列表。用于下单前让用户确认：' +
+        '如果有历史地址，优先让用户从已有地址中选择；如果没有或想用新地址，再让用户提供新地址。',
+      inputSchema: { type: 'object', properties: {} },
+      handler: async () => {
+        const addresses: string[] = await apiCall(config, 'GET', '/api/orders/my/addresses');
+        return { addresses };
+      },
+    },
+
     // ── get_cake_options ──────────────────────────────────────────────────
     {
       name: 'get_cake_options',

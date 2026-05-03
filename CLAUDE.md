@@ -28,6 +28,9 @@
 ### login_with_code
 验证码登录。参数: phone, code(6位) → 自动创建/关联账户，返回 API Key
 
+### get_my_addresses
+获取当前账户的历史收件地址列表。登录后调用，让用户选择已有地址或提供新地址。
+
 ### get_cake_options
 获取所有可选配置和价格。展示给用户做选择。
 
@@ -45,11 +48,12 @@
 ## Ordering Flow
 
 1. 用户表达订蛋糕意愿 → 未登录则走 Authentication Flow
-2. 调 get_cake_options 了解可选配置
-3. 帮用户确定配置（根据口味、人数、预算推荐）
-4. 调 calculate_cake_price 展示价格明细 → 用户确认
-5. 调 place_order 下单（recipient 信息默认用账户绑定信息，用户可覆盖）
-6. 返回订单号 + 支付链接（https://1cake.com/pay/{orderId}），用户点击扫码支付
+2. 调 get_my_addresses 获取历史地址 → 如有，让用户选择已有地址或填新地址
+3. 调 get_cake_options 了解可选配置
+4. 帮用户确定配置（根据口味、人数、预算推荐）
+5. 调 calculate_cake_price 展示价格明细 → 用户确认
+6. 调 place_order 下单（recipient 信息默认用账户绑定信息，用户可覆盖）
+7. 返回订单号 + 支付链接（https://1cake.com/pay/{orderId}），用户点击扫码支付
 
 ## 蛋糕选项速查
 
